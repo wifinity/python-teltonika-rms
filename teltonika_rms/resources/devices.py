@@ -306,9 +306,7 @@ class DevicesResource(BaseResource):
             )
 
         # Cast all IDs to integers
-        casted_ids = [
-            self._cast_to_int(did, "device_id") for did in device_ids_list
-        ]
+        casted_ids = [self._cast_to_int(did, "device_id") for did in device_ids_list]
 
         # Validate all IDs are >= 1
         invalid_ids = [did for did in casted_ids if did < 1]
@@ -417,7 +415,9 @@ class DevicesResource(BaseResource):
             )
 
         # Cast all IDs to integers
-        casted_ids = [self._cast_to_int(device_id, "device_id") for device_id in device_ids]
+        casted_ids = [
+            self._cast_to_int(device_id, "device_id") for device_id in device_ids
+        ]
 
         # Validate all IDs are >= 1
         invalid_ids = [did for did in casted_ids if did < 1]
@@ -427,9 +427,7 @@ class DevicesResource(BaseResource):
             )
 
         # Send DELETE request with device_id array in body
-        response = self.client.delete(
-            self.path, json={"device_id": casted_ids}
-        )
+        response = self.client.delete(self.path, json={"device_id": casted_ids})
         return cast(dict[str, Any] | None, response)
 
     def move(

@@ -756,7 +756,9 @@ def test_devices_create_with_string_ids(client: RMSClient):
     assert isinstance(request_json["data"], list)
     assert len(request_json["data"]) == 1
     assert request_json["data"][0]["company_id"] == 123  # Should be int, not string
-    assert request_json["data"][0]["serial"] == "1234567890"  # Should be string, not int
+    assert (
+        request_json["data"][0]["serial"] == "1234567890"
+    )  # Should be string, not int
 
 
 @respx.mock
@@ -775,9 +777,7 @@ def test_devices_get_with_string_id(client: RMSClient):
 @respx.mock
 def test_devices_filter_with_string_company_id(client: RMSClient):
     """Test devices.filter() with string company_id (should be cast to int)."""
-    respx.get(
-        "https://rms.teltonika-networks.com/api/devices?company_id=123"
-    ).mock(
+    respx.get("https://rms.teltonika-networks.com/api/devices?company_id=123").mock(
         return_value=resp(
             status_code=200,
             json={"data": [{"id": 1, "status": "online", "company_id": 123}]},
@@ -957,7 +957,10 @@ def test_devices_assign_tags_string_ids(client: RMSClient):
     assert isinstance(request_json["data"], list)
     assert len(request_json["data"]) == 1
     assert request_json["data"][0]["device_id"] == 123  # Should be int, not string
-    assert request_json["data"][0]["tag_id"] == [456, 789]  # Should be ints, not strings
+    assert request_json["data"][0]["tag_id"] == [
+        456,
+        789,
+    ]  # Should be ints, not strings
 
 
 def test_devices_assign_tags_invalid_device_id_raises(client: RMSClient):
