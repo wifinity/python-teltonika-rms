@@ -22,7 +22,7 @@ pip install teltonika-rms
 Or install from source:
 
 ```bash
-git clone https://github.com/yourusername/python-teltonika-rms.git
+git clone https://github.com/wifinity/python-teltonika-rms.git
 cd python-teltonika-rms
 pip install -e .
 ```
@@ -226,6 +226,20 @@ updated = client.devices.update(789, {"name": "Updated Device"})
 
 # Delete a device
 client.devices.delete(789)
+
+# Move a device to a different company
+# WARNING: The move API endpoint does not actually work as expected
+client.devices.move(789, company_id=2)
+
+# Move multiple devices to a different company
+# WARNING: The move API endpoint does not actually work as expected
+client.devices.move([789, 790, 791], company_id=2)
+
+# Assign tags to a device
+client.devices.assign_tags(device_id=789, tag_ids=456)
+
+# Assign multiple tags to a device
+client.devices.assign_tags(device_id=789, tag_ids=[456, 789])
 ```
 
 #### Device Commands
@@ -456,81 +470,12 @@ result = client.device_commands.execute(
 # Create a tag
 tag = client.tags.create(name="Production")
 
-# Assign tag to devices (using low-level API)
-client.post(
-    "/devices/tags",
-    json={"device_id": [123, 456], "tag_id": [tag["id"]]}
-)
+# Assign tag to a device
+client.devices.assign_tags(device_id=123, tag_ids=tag["id"])
+
+# Assign multiple tags to a device
+client.devices.assign_tags(device_id=123, tag_ids=[tag["id"], another_tag["id"]])
 
 # List all tags
 all_tags = client.tags.all()
 ```
-
-## Testing
-
-Run the test suite:
-
-```bash
-# Install development dependencies
-pip install -r requirements-dev.txt
-
-# Run tests
-pytest
-
-# Run tests with coverage
-pytest --cov=teltonika_rms --cov-report=html
-```
-
-## Requirements
-
-- Python 3.12+
-- httpx >= 0.27.0
-- pydantic >= 2.0.0
-
-## Development
-
-### Setting up Development Environment
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/python-teltonika-rms.git
-cd python-teltonika-rms
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
-
-# Install in development mode
-pip install -e .
-```
-
-### Running Tests
-
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=teltonika_rms --cov-report=term-missing
-
-# Run specific test file
-pytest tests/test_resources.py
-```
-
-## License
-
-MIT License
-
-## Support
-
-For issues and questions:
-- GitHub Issues: https://github.com/yourusername/python-teltonika-rms/issues
-- RMS API Documentation: https://rms.teltonika-networks.com/api/docs
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.

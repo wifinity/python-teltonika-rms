@@ -30,67 +30,6 @@ def _normalize_log_level(level: str | int) -> int:
     return level
 
 
-def _configure_main_logger(logger: logging.Logger, level: int) -> None:
-    """Configure the main teltonika_rms logger.
-
-    Args:
-        logger: The main logger instance
-        level: Log level to set
-    """
-    logger.setLevel(level)
-    logger.propagate = True
-
-    # If no handler exists, add a StreamHandler
-    if not logger.handlers:
-        handler: logging.Handler = logging.StreamHandler()
-        handler.setFormatter(
-            logging.Formatter(
-                "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-                datefmt="%Y-%m-%d %H:%M:%S",
-            )
-        )
-        logger.addHandler(handler)
-
-    # Set level on all handlers
-    for handler in logger.handlers:
-        handler.setLevel(level)
-
-
-def _configure_child_loggers(level: int) -> None:
-    """Configure all existing teltonika_rms child loggers.
-
-    Args:
-        level: Log level to set
-    """
-    for name in list(logging.Logger.manager.loggerDict.keys()):
-        if name.startswith("teltonika_rms"):
-            child_logger = logging.getLogger(name)
-            child_logger.setLevel(level)
-            # Set level on all handlers for this child logger
-            for child_handler in child_logger.handlers:
-                child_handler.setLevel(level)
-            # Ensure child loggers propagate to parent
-            child_logger.propagate = True
-            # Remove any handlers from child loggers - let them use parent's handler
-            # This prevents duplicate log messages
-            for handler in list(child_logger.handlers):
-                child_logger.removeHandler(handler)
-
-
-def _configure_httpx_logger(level: int) -> None:
-    """Configure httpx and httpcore loggers to be completely silenced.
-
-    httpx and httpcore log HTTP requests at INFO level. We completely disable
-    these loggers to prevent any HTTP request logs from appearing.
-
-    Args:
-        level: Current teltonika_rms log level (unused, kept for API consistency)
-    """
-    # Completely disable httpx and httpcore loggers to silence all HTTP request logs
-    logging.getLogger("httpx").disabled = True
-    logging.getLogger("httpcore").disabled = True
-
-
 def set_log_level(level: str | int) -> None:
     """Set the log level for the teltonika_rms logger.
 
@@ -101,9 +40,25 @@ def set_log_level(level: str | int) -> None:
     level_int = _normalize_log_level(level)
     logger = logging.getLogger("teltonika_rms")
 
-    _configure_main_logger(logger, level_int)
-    _configure_child_loggers(level_int)
-    _configure_httpx_logger(level_int)
+    # Set logger level (this propagates to handlers automatically)
+    logger.setLevel(level_int)
+    logger.propagate = True  # Ensure propagation to root
+
+    # Only add handler if neither logger nor root have handlers
+    # This avoids duplicate logs if user has already configured root logger
+    if not logger.handlers and not logging.root.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(
+            logging.Formatter(
+                "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+            )
+        )
+        logger.addHandler(handler)
+
+    # Disable httpx/httpcore loggers to silence HTTP request logs
+    logging.getLogger("httpx").disabled = True
+    logging.getLogger("httpcore").disabled = True
 
 
 def get_logger(name: str) -> logging.Logger:

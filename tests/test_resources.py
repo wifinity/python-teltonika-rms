@@ -238,15 +238,56 @@ def test_tags_get_by_id(client: RMSClient):
 
 @respx.mock
 def test_tags_get_by_name(client: RMSClient):
-    """Test tags.get() with filter parameters."""
-    respx.get("https://rms.teltonika-networks.com/api/tags?name=Production").mock(
+    """Test tags.get() with name parameter (uses q= then client-side exact match)."""
+    respx.get("https://rms.teltonika-networks.com/api/tags?q=DEPLOYED").mock(
         return_value=resp(
-            status_code=200, json={"data": [{"id": 1, "name": "Production"}]}
+            status_code=200,
+            json={
+                "data": [
+                    {"id": 1, "name": "DEPLOYED"},
+                    {"id": 2, "name": "DEPLOYED_TEST"},
+                ]
+            },
         )
     )
 
-    tag = client.tags.get(name="Production")
-    assert tag["name"] == "Production"
+    tag = client.tags.get(name="DEPLOYED")
+    assert tag["id"] == 1
+    assert tag["name"] == "DEPLOYED"
+
+
+@respx.mock
+def test_tags_get_multiple_results(client: RMSClient):
+    """Test tags.get() raises error when multiple results found."""
+    # Mock the all() call that _get_by_filters() makes internally
+    respx.get("https://rms.teltonika-networks.com/api/tags?limit=100&offset=0").mock(
+        return_value=resp(
+            status_code=200,
+            json={
+                "data": [
+                    {"id": 1, "name": "Tag 1", "company_id": 1},
+                    {"id": 2, "name": "Tag 2", "company_id": 1},
+                ],
+                "meta": {"total": 2},
+            },
+        )
+    )
+
+    with pytest.raises(ValueError, match="Multiple tags found"):
+        client.tags.get(company_id=1)
+
+
+@respx.mock
+def test_tags_get_no_results(client: RMSClient):
+    """Test tags.get() raises error when no results found."""
+    from teltonika_rms.exceptions import RMSNotFoundError
+
+    respx.get("https://rms.teltonika-networks.com/api/tags?q=Nonexistent").mock(
+        return_value=resp(status_code=200, json={"data": []})
+    )
+
+    with pytest.raises(RMSNotFoundError, match="No tags found"):
+        client.tags.get(name="Nonexistent")
 
 
 @respx.mock
@@ -258,6 +299,50 @@ def test_tags_create(client: RMSClient):
 
     tag = client.tags.create(name="New Tag")
     assert tag["name"] == "New Tag"
+
+
+@respx.mock
+def test_tags_filter_name_only(client: RMSClient):
+    """Test tags.filter() with name only (uses q= parameter)."""
+    respx.get("https://rms.teltonika-networks.com/api/tags?q=DEPLOYED").mock(
+        return_value=resp(
+            status_code=200,
+            json={
+                "data": [
+                    {"id": 1, "name": "DEPLOYED"},
+                    {"id": 2, "name": "DEPLOYED_TEST"},
+                    {"id": 3, "name": "DEPLOYED_PROD"},
+                ]
+            },
+        )
+    )
+
+    tags = client.tags.filter(name="DEPLOYED")
+    # Should return exact matches after client-side filtering
+    assert len(tags) == 1
+    assert tags[0]["name"] == "DEPLOYED"
+
+
+@respx.mock
+def test_tags_filter_multiple_params(client: RMSClient):
+    """Test tags.filter() with multiple params (client-side filtering)."""
+    # First call to all() - page 1
+    respx.get("https://rms.teltonika-networks.com/api/tags?limit=100&offset=0").mock(
+        return_value=resp(
+            status_code=200,
+            json={
+                "data": [
+                    {"id": 1, "name": "DEPLOYED", "company_id": 1},
+                    {"id": 2, "name": "OTHER", "company_id": 2},
+                ],
+                "meta": {"total": 2},
+            },
+        )
+    )
+
+    tags = client.tags.filter(name="DEPLOYED", company_id=1)
+    assert len(tags) == 1
+    assert tags[0]["name"] == "DEPLOYED"
 
 
 @respx.mock
@@ -575,3 +660,313 @@ def test_device_commands_actions_logs(client: RMSClient):
     logs = client.device_commands.actions.logs(device_id=1, limit=10)
     assert logs is not None
     assert "data" in logs
+
+
+@respx.mock
+def test_devices_delete_single(client: RMSClient):
+    """Test devices.delete() with single device ID."""
+    respx.delete("https://rms.teltonika-networks.com/api/devices").mock(
+        return_value=resp(status_code=200, json={"success": True})
+    )
+
+    result = client.devices.delete(123)
+    assert result["success"] is True
+
+    # Verify request format
+    request = respx.calls.last.request
+    assert request is not None
+    assert request.method == "DELETE"
+    assert request.url.path == "/api/devices"
+    import json
+
+    request_json = json.loads(request.read().decode("utf-8"))
+    assert "device_id" in request_json
+    assert request_json["device_id"] == [123]
+
+
+@respx.mock
+def test_devices_delete_multiple(client: RMSClient):
+    """Test devices.delete() with list of device IDs."""
+    respx.delete("https://rms.teltonika-networks.com/api/devices").mock(
+        return_value=resp(status_code=200, json={"success": True})
+    )
+
+    result = client.devices.delete([123, 456, 789])
+    assert result["success"] is True
+
+    # Verify request format
+    request = respx.calls.last.request
+    assert request is not None
+    import json
+
+    request_json = json.loads(request.read().decode("utf-8"))
+    assert "device_id" in request_json
+    assert request_json["device_id"] == [123, 456, 789]
+
+
+@respx.mock
+def test_devices_delete_string_id(client: RMSClient):
+    """Test devices.delete() with string device ID (should be cast to int)."""
+    respx.delete("https://rms.teltonika-networks.com/api/devices").mock(
+        return_value=resp(status_code=200, json={"success": True})
+    )
+
+    result = client.devices.delete("123")
+    assert result["success"] is True
+
+    # Verify request format - string ID should be cast to int
+    request = respx.calls.last.request
+    assert request is not None
+    import json
+
+    request_json = json.loads(request.read().decode("utf-8"))
+    assert request_json["device_id"] == [123]
+
+
+@respx.mock
+def test_devices_create_with_string_ids(client: RMSClient):
+    """Test devices.create() with string IDs (company_id cast to int, serial remains string)."""
+    respx.post("https://rms.teltonika-networks.com/api/devices").mock(
+        return_value=resp(
+            status_code=201,
+            json={
+                "success": True,
+                "data": [{"id": 1, "mac": "00:11:22:33:44:55", "serial": "1234567890"}],
+            },
+        )
+    )
+
+    device = client.devices.create(
+        company_id="123",  # String should be cast to int
+        device_series="rut",
+        serial="1234567890",  # String should remain as string
+        mac="00:11:22:33:44:55",
+        password_confirmation="Password123",
+    )
+    assert device["success"] is True
+
+    # Verify the request was made with correct types
+    request = respx.calls.last.request
+    assert request is not None
+    import json
+
+    request_data = request.read()
+    request_json = json.loads(request_data.decode("utf-8"))
+    assert "data" in request_json
+    assert isinstance(request_json["data"], list)
+    assert len(request_json["data"]) == 1
+    assert request_json["data"][0]["company_id"] == 123  # Should be int, not string
+    assert request_json["data"][0]["serial"] == "1234567890"  # Should be string, not int
+
+
+@respx.mock
+def test_devices_get_with_string_id(client: RMSClient):
+    """Test devices.get() with string ID (should be cast to int)."""
+    respx.get("https://rms.teltonika-networks.com/api/devices/123").mock(
+        return_value=resp(
+            status_code=200, json={"id": 123, "name": "Device 1", "serial": "12345"}
+        )
+    )
+
+    device = client.devices.get("123")  # String ID
+    assert device["id"] == 123
+
+
+@respx.mock
+def test_devices_filter_with_string_company_id(client: RMSClient):
+    """Test devices.filter() with string company_id (should be cast to int)."""
+    respx.get(
+        "https://rms.teltonika-networks.com/api/devices?company_id=123"
+    ).mock(
+        return_value=resp(
+            status_code=200,
+            json={"data": [{"id": 1, "status": "online", "company_id": 123}]},
+        )
+    )
+
+    devices = client.devices.filter(company_id="123")  # String company_id
+    assert len(devices) == 1
+    assert devices[0]["company_id"] == 123
+
+
+def test_devices_delete_invalid_id_raises(client: RMSClient):
+    """Test devices.delete() raises error for invalid ID."""
+    with pytest.raises(ValueError, match="device_id must be an integer"):
+        client.devices.delete("not-a-number")
+
+
+def test_devices_create_invalid_company_id_raises(client: RMSClient):
+    """Test devices.create() raises error for invalid company_id."""
+    with pytest.raises(ValueError, match="company_id must be an integer"):
+        client.devices.create(
+            company_id="not-a-number",
+            device_series="rut",
+            serial="1234567890",
+            mac="00:11:22:33:44:55",
+            password_confirmation="Password123",
+        )
+
+
+@respx.mock
+def test_devices_move_single(client: RMSClient):
+    """Test devices.move() with single device ID."""
+    respx.post("https://rms.teltonika-networks.com/api/devices/move/").mock(
+        return_value=resp(status_code=200, json={"success": True})
+    )
+
+    result = client.devices.move(123, company_id=2)
+    assert result["success"] is True
+
+    # Verify request format
+    request = respx.calls.last.request
+    assert request is not None
+    assert request.method == "POST"
+    assert request.url.path == "/api/devices/move/"
+    import json
+
+    request_json = json.loads(request.read().decode("utf-8"))
+    assert "device_id" in request_json
+    assert "company_id" in request_json
+    assert request_json["device_id"] == [123]
+    assert request_json["company_id"] == 2
+
+
+@respx.mock
+def test_devices_move_multiple(client: RMSClient):
+    """Test devices.move() with list of device IDs."""
+    respx.post("https://rms.teltonika-networks.com/api/devices/move/").mock(
+        return_value=resp(status_code=200, json={"success": True})
+    )
+
+    result = client.devices.move([123, 456, 789], company_id=2)
+    assert result["success"] is True
+
+    # Verify request format
+    request = respx.calls.last.request
+    assert request is not None
+    import json
+
+    request_json = json.loads(request.read().decode("utf-8"))
+    assert request_json["device_id"] == [123, 456, 789]
+    assert request_json["company_id"] == 2
+
+
+@respx.mock
+def test_devices_move_string_ids(client: RMSClient):
+    """Test devices.move() with string device IDs and company_id (should be cast to ints)."""
+    respx.post("https://rms.teltonika-networks.com/api/devices/move/").mock(
+        return_value=resp(status_code=200, json={"success": True})
+    )
+
+    result = client.devices.move(["123", "456"], company_id="2")
+    assert result["success"] is True
+
+    # Verify request format - string IDs should be cast to ints
+    request = respx.calls.last.request
+    assert request is not None
+    import json
+
+    request_json = json.loads(request.read().decode("utf-8"))
+    assert request_json["device_id"] == [123, 456]  # Should be ints, not strings
+    assert request_json["company_id"] == 2  # Should be int, not string
+
+
+def test_devices_move_invalid_device_id_raises(client: RMSClient):
+    """Test devices.move() raises error for invalid device ID."""
+    with pytest.raises(ValueError, match="device_id must be an integer"):
+        client.devices.move("not-a-number", company_id=2)
+
+
+def test_devices_move_invalid_company_id_raises(client: RMSClient):
+    """Test devices.move() raises error for invalid company_id."""
+    with pytest.raises(ValueError, match="company_id must be an integer"):
+        client.devices.move(123, company_id="not-a-number")
+
+
+def test_devices_move_zero_company_id_raises(client: RMSClient):
+    """Test devices.move() raises error for company_id <= 0."""
+    with pytest.raises(ValueError, match="company_id must be a positive integer"):
+        client.devices.move(123, company_id=0)
+
+
+@respx.mock
+def test_devices_assign_tags_single(client: RMSClient):
+    """Test devices.assign_tags() with single tag ID."""
+    respx.put("https://rms.teltonika-networks.com/api/devices/tags/assign").mock(
+        return_value=resp(status_code=200, json={"success": True})
+    )
+
+    result = client.devices.assign_tags(device_id=123, tag_ids=456)
+    assert result["success"] is True
+
+    # Verify request format
+    request = respx.calls.last.request
+    assert request is not None
+    assert request.method == "PUT"
+    assert request.url.path == "/api/devices/tags/assign"
+    import json
+
+    request_json = json.loads(request.read().decode("utf-8"))
+    assert "data" in request_json
+    assert isinstance(request_json["data"], list)
+    assert len(request_json["data"]) == 1
+    assert request_json["data"][0]["device_id"] == 123
+    assert request_json["data"][0]["tag_id"] == [456]
+
+
+@respx.mock
+def test_devices_assign_tags_multiple(client: RMSClient):
+    """Test devices.assign_tags() with list of tag IDs."""
+    respx.put("https://rms.teltonika-networks.com/api/devices/tags/assign").mock(
+        return_value=resp(status_code=200, json={"success": True})
+    )
+
+    result = client.devices.assign_tags(device_id=123, tag_ids=[456, 789])
+    assert result["success"] is True
+
+    # Verify request format
+    request = respx.calls.last.request
+    assert request is not None
+    import json
+
+    request_json = json.loads(request.read().decode("utf-8"))
+    assert "data" in request_json
+    assert isinstance(request_json["data"], list)
+    assert len(request_json["data"]) == 1
+    assert request_json["data"][0]["device_id"] == 123
+    assert request_json["data"][0]["tag_id"] == [456, 789]
+
+
+@respx.mock
+def test_devices_assign_tags_string_ids(client: RMSClient):
+    """Test devices.assign_tags() with string device_id and tag_ids (should be cast to ints)."""
+    respx.put("https://rms.teltonika-networks.com/api/devices/tags/assign").mock(
+        return_value=resp(status_code=200, json={"success": True})
+    )
+
+    result = client.devices.assign_tags(device_id="123", tag_ids=["456", "789"])
+    assert result["success"] is True
+
+    # Verify request format - string IDs should be cast to ints
+    request = respx.calls.last.request
+    assert request is not None
+    import json
+
+    request_json = json.loads(request.read().decode("utf-8"))
+    assert "data" in request_json
+    assert isinstance(request_json["data"], list)
+    assert len(request_json["data"]) == 1
+    assert request_json["data"][0]["device_id"] == 123  # Should be int, not string
+    assert request_json["data"][0]["tag_id"] == [456, 789]  # Should be ints, not strings
+
+
+def test_devices_assign_tags_invalid_device_id_raises(client: RMSClient):
+    """Test devices.assign_tags() raises error for invalid device_id."""
+    with pytest.raises(ValueError, match="device_id must be an integer"):
+        client.devices.assign_tags(device_id="not-a-number", tag_ids=456)
+
+
+def test_devices_assign_tags_invalid_tag_id_raises(client: RMSClient):
+    """Test devices.assign_tags() raises error for invalid tag_id."""
+    with pytest.raises(ValueError, match="tag_id must be an integer"):
+        client.devices.assign_tags(device_id=123, tag_ids="not-a-number")

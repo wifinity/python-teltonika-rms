@@ -69,5 +69,3 @@ teltonika_rms/generated/
 .openapi-generator/
 .openapi-generator-ignore
 
-.env
-uv.lock

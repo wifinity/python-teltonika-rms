@@ -405,17 +405,19 @@ class RMSClient:
         self,
         path: str,
         params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         """Make a DELETE request.
 
         Args:
             path: API path
             params: Query parameters
+            json: JSON body data
 
         Returns:
             Response data
         """
-        return self._request_with_retry("DELETE", path, params=params)
+        return self._request_with_retry("DELETE", path, params=params, json=json)
 
     def get_user(self) -> dict[str, Any] | None:
         """Get authenticated user info.

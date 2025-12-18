@@ -8,16 +8,9 @@ import respx
 from teltonika_rms.client import RMSClient
 from teltonika_rms.logging_config import set_log_level
 
-# Configure logging for tests - set root logger to INFO
+# Configure logging for tests
 logging.basicConfig(level=logging.INFO)
-# Set level on root logger's handlers to ensure they respect INFO level
-for handler in logging.root.handlers:
-    handler.setLevel(logging.INFO)
-# Completely disable httpx and httpcore loggers to silence all HTTP request logs
-logging.getLogger("httpx").disabled = True
-logging.getLogger("httpcore").disabled = True
-# Explicitly set teltonika_rms logger hierarchy to INFO
-# This must be done after imports to catch all child loggers
+# Set teltonika_rms logger to INFO (httpx/httpcore will be disabled by set_log_level)
 set_log_level(logging.INFO)
 
 
