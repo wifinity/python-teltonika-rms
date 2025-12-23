@@ -1,7 +1,7 @@
 """Devices resource."""
 
 import logging
-from typing import Any, cast
+from typing import Any, Dict, List, Optional, Union, cast
 
 from teltonika_rms.exceptions import RMSNotFoundError
 from teltonika_rms.resources.base import BaseResource
@@ -22,7 +22,7 @@ class DevicesResource(BaseResource):
         """Initialize devices resource."""
         super().__init__(client, "/devices")
 
-    def _cast_to_int(self, value: int | str, field_name: str = "value") -> int:
+    def _cast_to_int(self, value: Union[int, str], field_name: str = "value") -> int:
         """Cast a value to integer, accepting strings containing numbers.
 
         Args:
@@ -102,7 +102,7 @@ class DevicesResource(BaseResource):
                 f"Missing required fields for device creation: {', '.join(missing_fields)}"
             )
 
-    def filter(self, **kwargs: Any) -> list[dict[str, Any]]:
+    def filter(self, **kwargs: Any) -> List[Dict[str, Any]]:
         """Get filtered list of devices using API filtering.
 
         Only the following filter parameters are supported by the API:
@@ -125,9 +125,9 @@ class DevicesResource(BaseResource):
         if "company_id" in kwargs:
             kwargs["company_id"] = self._cast_to_int(kwargs["company_id"], "company_id")
         # Use parent filter method which passes params to API
-        return cast(list[dict[str, Any]], super().filter(**kwargs))
+        return cast(List[Dict[str, Any]], super().filter(**kwargs))
 
-    def _get_by_id(self, id: int | str) -> dict[str, Any]:
+    def _get_by_id(self, id: Union[int, str]) -> Dict[str, Any]:
         """Get a device by ID.
 
         Args:
@@ -150,12 +150,12 @@ class DevicesResource(BaseResource):
                 data = response["data"]
                 # If data is a dict (single object), return it; if list, return first item
                 if isinstance(data, dict):
-                    return cast(dict[str, Any], data)
+                    return cast(Dict[str, Any], data)
                 elif isinstance(data, list) and len(data) > 0:
-                    return cast(dict[str, Any], data[0])
-        return cast(dict[str, Any], response)
+                    return cast(Dict[str, Any], data[0])
+        return cast(Dict[str, Any], response)
 
-    def _get_by_filters(self, **kwargs: Any) -> dict[str, Any]:
+    def _get_by_filters(self, **kwargs: Any) -> Dict[str, Any]:
         """Get a device by filter parameters using API filtering.
 
         Args:
@@ -184,9 +184,11 @@ class DevicesResource(BaseResource):
                 f"Multiple devices found ({len(items)}). Use filter() to get all results or be more specific."
             )
 
-        return cast(dict[str, Any], items[0])
+        return cast(Dict[str, Any], items[0])
 
-    def get(self, id: int | str | None = None, **kwargs: Any) -> dict[str, Any]:
+    def get(
+        self, id: Optional[Union[int, str]] = None, **kwargs: Any
+    ) -> Dict[str, Any]:
         """Get a single device by ID or by filter parameters.
 
         Only the following filter parameters are supported:
@@ -215,7 +217,7 @@ class DevicesResource(BaseResource):
         # Neither ID nor filter parameters provided
         raise ValueError("Either 'id' or filter parameters must be provided")
 
-    def create(self, **kwargs: Any) -> dict[str, Any]:
+    def create(self, **kwargs: Any) -> Dict[str, Any]:
         """Create a new device.
 
         Required fields:
@@ -262,9 +264,9 @@ class DevicesResource(BaseResource):
         response = self.client.post(self.path, json=wrapped_data)
         if not response:
             raise ValueError("Failed to create device")
-        return cast(dict[str, Any], response)
+        return cast(Dict[str, Any], response)
 
-    def update(self, id: int | str, data: dict[str, Any]) -> dict[str, Any]:
+    def update(self, id: Union[int, str], data: Dict[str, Any]) -> Dict[str, Any]:
         """Update an existing device.
 
         Args:
@@ -279,11 +281,11 @@ class DevicesResource(BaseResource):
         response = self.client.put(f"{self.path}/{device_id}", json=data)
         if not response:
             raise ValueError(f"Failed to update device with id {device_id}")
-        return cast(dict[str, Any], response)
+        return cast(Dict[str, Any], response)
 
     def _normalize_device_ids(
-        self, device_ids: int | str | list[int | str]
-    ) -> list[int]:
+        self, device_ids: Union[int, str, List[Union[int, str]]]
+    ) -> List[int]:
         """Normalize device IDs to a list and validate.
 
         Args:
@@ -318,8 +320,8 @@ class DevicesResource(BaseResource):
         return casted_ids
 
     def enable_monitoring(
-        self, device_ids: int | str | list[int | str]
-    ) -> dict[str, Any]:
+        self, device_ids: Union[int, str, List[Union[int, str]]]
+    ) -> Dict[str, Any]:
         """Enable monitoring on one or more devices.
 
         Args:
@@ -334,8 +336,8 @@ class DevicesResource(BaseResource):
         return self.set_monitoring(device_ids, enabled=True)
 
     def disable_monitoring(
-        self, device_ids: int | str | list[int | str]
-    ) -> dict[str, Any]:
+        self, device_ids: Union[int, str, List[Union[int, str]]]
+    ) -> Dict[str, Any]:
         """Disable monitoring on one or more devices.
 
         Args:
@@ -350,8 +352,8 @@ class DevicesResource(BaseResource):
         return self.set_monitoring(device_ids, enabled=False)
 
     def set_monitoring(
-        self, device_ids: int | str | list[int | str], enabled: bool
-    ) -> dict[str, Any]:
+        self, device_ids: Union[int, str, List[Union[int, str]]], enabled: bool
+    ) -> Dict[str, Any]:
         """Set monitoring status on one or more devices.
 
         Args:
@@ -382,11 +384,11 @@ class DevicesResource(BaseResource):
         response = self.client.put(f"{self.path}/monitoring", json=monitoring_data)
         if not response:
             raise ValueError("Failed to set device monitoring")
-        return cast(dict[str, Any], response)
+        return cast(Dict[str, Any], response)
 
     def delete(
-        self, id: int | str | list[int | str] | None = None
-    ) -> dict[str, Any] | None:
+        self, id: Optional[Union[int, str, List[Union[int, str]]]] = None
+    ) -> Optional[Dict[str, Any]]:
         """Delete one or more devices.
 
         Device deletion requires sending device IDs in the request body,
@@ -428,13 +430,13 @@ class DevicesResource(BaseResource):
 
         # Send DELETE request with device_id array in body
         response = self.client.delete(self.path, json={"device_id": casted_ids})
-        return cast(dict[str, Any] | None, response)
+        return cast(Optional[Dict[str, Any]], response)
 
     def move(
         self,
-        device_id: int | str | list[int | str],
-        company_id: int | str,
-    ) -> dict[str, Any]:
+        device_id: Union[int, str, List[Union[int, str]]],
+        company_id: Union[int, str],
+    ) -> Dict[str, Any]:
         """Move one or more devices to a different company.
 
         Args:
@@ -467,13 +469,13 @@ class DevicesResource(BaseResource):
         response = self.client.post(f"{self.path}/move/", json=move_data)
         if not response:
             raise ValueError("Failed to move devices")
-        return cast(dict[str, Any], response)
+        return cast(Dict[str, Any], response)
 
     def assign_tags(
         self,
-        device_id: int | str,
-        tag_ids: int | str | list[int | str],
-    ) -> dict[str, Any]:
+        device_id: Union[int, str],
+        tag_ids: Union[int, str, List[Union[int, str]]],
+    ) -> Dict[str, Any]:
         """Assign one or more tags to a device.
 
         Args:
@@ -527,4 +529,4 @@ class DevicesResource(BaseResource):
         response = self.client.put(f"{self.path}/tags/assign", json=assign_data)
         if not response:
             raise ValueError("Failed to assign tags to device")
-        return cast(dict[str, Any], response)
+        return cast(Dict[str, Any], response)

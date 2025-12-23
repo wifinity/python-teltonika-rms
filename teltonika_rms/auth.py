@@ -1,7 +1,7 @@
 """Authentication handling for Teltonika RMS API."""
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict
 
 if TYPE_CHECKING:
     from httpx import Headers
@@ -23,7 +23,7 @@ class BearerAuth:
         self.token = token
         logger.debug("BearerAuth initialized")
 
-    def get_headers(self) -> dict[str, str]:
+    def get_headers(self) -> Dict[str, str]:
         """Get authentication headers.
 
         Returns:

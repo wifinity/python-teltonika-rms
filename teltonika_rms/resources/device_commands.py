@@ -1,7 +1,7 @@
 """Device commands resource."""
 
 import logging
-from typing import Any, cast
+from typing import Any, Dict, List, Optional, cast
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +13,7 @@ class DeviceCommandsActions:
         """Initialize device actions resource."""
         self.client = client
 
-    def execute(self, **kwargs: Any) -> dict[str, Any] | None:
+    def execute(self, **kwargs: Any) -> Optional[Dict[str, Any]]:
         """Execute device action for a device list.
 
         Args:
@@ -23,9 +23,9 @@ class DeviceCommandsActions:
             Response data
         """
         result = self.client.post("/devices/actions", json=kwargs)
-        return cast(dict[str, Any] | None, result)
+        return cast(Optional[Dict[str, Any]], result)
 
-    def cancel(self, device_ids: list[int]) -> dict[str, Any] | None:
+    def cancel(self, device_ids: List[int]) -> Optional[Dict[str, Any]]:
         """Cancel device action for given devices.
 
         Args:
@@ -37,16 +37,16 @@ class DeviceCommandsActions:
         result = self.client.post(
             "/devices/actions/cancel", json={"devices": device_ids}
         )
-        return cast(dict[str, Any] | None, result)
+        return cast(Optional[Dict[str, Any]], result)
 
     def logs(
         self,
-        device_id: int | None = None,
-        tag_id: int | None = None,
-        limit: int | None = None,
-        offset: int | None = None,
+        device_id: Optional[int] = None,
+        tag_id: Optional[int] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
         **kwargs: Any,
-    ) -> dict[str, Any] | None:
+    ) -> Optional[Dict[str, Any]]:
         """Get device action logs.
 
         Args:
@@ -59,7 +59,7 @@ class DeviceCommandsActions:
         Returns:
             Action logs data
         """
-        params: dict[str, Any] = {}
+        params: Dict[str, Any] = {}
         if device_id is not None:
             params["device_id"] = device_id
         if tag_id is not None:
@@ -70,7 +70,7 @@ class DeviceCommandsActions:
             params["offset"] = offset
         params.update(kwargs)
         result = self.client.get("/devices/actions/logs", params=params)
-        return cast(dict[str, Any] | None, result)
+        return cast(Optional[Dict[str, Any]], result)
 
 
 class DeviceCommandsResource:
@@ -83,8 +83,8 @@ class DeviceCommandsResource:
         logger.debug("Initialized DeviceCommandsResource")
 
     def execute(
-        self, device_id: int, command_data: dict[str, Any]
-    ) -> dict[str, Any] | None:
+        self, device_id: int, command_data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
         """Execute command for a device.
 
         Args:
@@ -95,4 +95,4 @@ class DeviceCommandsResource:
             Response data
         """
         result = self.client.post(f"/devices/{device_id}/command", json=command_data)
-        return cast(dict[str, Any] | None, result)
+        return cast(Optional[Dict[str, Any]], result)
