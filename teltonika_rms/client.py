@@ -4,7 +4,7 @@ import json as json_module
 import logging
 import time
 from json import JSONDecodeError
-from typing import Any
+from typing import Any, Dict, Optional, Union
 
 import httpx
 
@@ -43,7 +43,7 @@ class RMSClient:
         timeout: float = 30.0,
         max_retries: int = 3,
         enable_retry: bool = True,
-        log_level: str | int | None = None,
+        log_level: Union[str, int, None] = None,
     ) -> None:
         """Initialize the RMS client.
 
@@ -94,7 +94,7 @@ class RMSClient:
         self._client.close()
         logger.debug("HTTP client closed")
 
-    def _handle_response(self, response: httpx.Response) -> dict[str, Any] | None:
+    def _handle_response(self, response: httpx.Response) -> Optional[Dict[str, Any]]:
         """Handle HTTP response and raise appropriate exceptions.
 
         Args:
@@ -211,11 +211,11 @@ class RMSClient:
         self,
         method: str,
         path: str,
-        params: dict[str, Any] | None = None,
-        json: dict[str, Any] | None = None,
+        params: Optional[Dict[str, Any]] = None,
+        json: Optional[Dict[str, Any]] = None,
         data: Any = None,
-        files: dict[str, Any] | None = None,
-    ) -> dict[str, Any] | None:
+        files: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
         """Make an HTTP request to the API.
 
         Args:
@@ -283,11 +283,11 @@ class RMSClient:
         self,
         method: str,
         path: str,
-        params: dict[str, Any] | None = None,
-        json: dict[str, Any] | None = None,
+        params: Optional[Dict[str, Any]] = None,
+        json: Optional[Dict[str, Any]] = None,
         data: Any = None,
-        files: dict[str, Any] | None = None,
-    ) -> dict[str, Any] | None:
+        files: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
         """Make an HTTP request with retry logic.
 
         Args:
@@ -310,7 +310,7 @@ class RMSClient:
         delay = 1.0
         max_delay = 60.0
         exponential_base = 2.0
-        last_exception: Exception | None = None
+        last_exception: Optional[Exception] = None
 
         for attempt in range(self.max_retries + 1):
             try:
@@ -342,8 +342,8 @@ class RMSClient:
     def get(
         self,
         path: str,
-        params: dict[str, Any] | None = None,
-    ) -> dict[str, Any] | None:
+        params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
         """Make a GET request.
 
         Args:
@@ -358,11 +358,11 @@ class RMSClient:
     def post(
         self,
         path: str,
-        json: dict[str, Any] | None = None,
+        json: Optional[Dict[str, Any]] = None,
         data: Any = None,
-        files: dict[str, Any] | None = None,
-        params: dict[str, Any] | None = None,
-    ) -> dict[str, Any] | None:
+        files: Optional[Dict[str, Any]] = None,
+        params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
         """Make a POST request.
 
         Args:
@@ -382,10 +382,10 @@ class RMSClient:
     def put(
         self,
         path: str,
-        json: dict[str, Any] | None = None,
+        json: Optional[Dict[str, Any]] = None,
         data: Any = None,
-        params: dict[str, Any] | None = None,
-    ) -> dict[str, Any] | None:
+        params: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
         """Make a PUT request.
 
         Args:
@@ -404,9 +404,9 @@ class RMSClient:
     def delete(
         self,
         path: str,
-        params: dict[str, Any] | None = None,
-        json: dict[str, Any] | None = None,
-    ) -> dict[str, Any] | None:
+        params: Optional[Dict[str, Any]] = None,
+        json: Optional[Dict[str, Any]] = None,
+    ) -> Optional[Dict[str, Any]]:
         """Make a DELETE request.
 
         Args:
@@ -419,7 +419,7 @@ class RMSClient:
         """
         return self._request_with_retry("DELETE", path, params=params, json=json)
 
-    def get_user(self) -> dict[str, Any] | None:
+    def get_user(self) -> Optional[Dict[str, Any]]:
         """Get authenticated user info.
 
         Returns:

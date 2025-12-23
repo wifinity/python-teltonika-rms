@@ -1,5 +1,7 @@
 """Custom exceptions for Teltonika RMS API client."""
 
+from typing import Dict, List, Optional
+
 
 class RMSAPIError(Exception):
     """Base exception for all RMS API errors."""
@@ -7,8 +9,8 @@ class RMSAPIError(Exception):
     def __init__(
         self,
         message: str,
-        status_code: int | None = None,
-        response_data: dict | None = None,
+        status_code: Optional[int] = None,
+        response_data: Optional[Dict] = None,
     ) -> None:
         """Initialize the exception.
 
@@ -29,7 +31,7 @@ class RMSAuthenticationError(RMSAPIError):
     def __init__(
         self,
         message: str = "Authentication failed",
-        response_data: dict | None = None,
+        response_data: Optional[Dict] = None,
     ) -> None:
         """Initialize authentication error."""
         super().__init__(message, status_code=401, response_data=response_data)
@@ -41,7 +43,7 @@ class RMSPermissionError(RMSAPIError):
     def __init__(
         self,
         message: str = "Permission denied",
-        response_data: dict | None = None,
+        response_data: Optional[Dict] = None,
     ) -> None:
         """Initialize permission error."""
         super().__init__(message, status_code=403, response_data=response_data)
@@ -53,7 +55,7 @@ class RMSNotFoundError(RMSAPIError):
     def __init__(
         self,
         message: str = "Resource not found",
-        response_data: dict | None = None,
+        response_data: Optional[Dict] = None,
     ) -> None:
         """Initialize not found error."""
         super().__init__(message, status_code=404, response_data=response_data)
@@ -65,8 +67,8 @@ class RMSValidationError(RMSAPIError):
     def __init__(
         self,
         message: str = "Validation error",
-        response_data: dict | None = None,
-        errors: list[dict] | None = None,
+        response_data: Optional[Dict] = None,
+        errors: Optional[List[Dict]] = None,
     ) -> None:
         """Initialize validation error.
 
@@ -85,7 +87,7 @@ class RMSConnectionError(RMSAPIError):
     def __init__(
         self,
         message: str = "Connection error",
-        original_error: Exception | None = None,
+        original_error: Optional[Exception] = None,
     ) -> None:
         """Initialize connection error.
 

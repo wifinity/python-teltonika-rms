@@ -15,7 +15,7 @@ lint: format-check ## Run linter
 
 type-check: ## Run type checks
 	@echo "Running mypy"
-	cd teltonika_rms && uv run mypy . --explicit-package-bases --show-error-codes --error-summary
+	uv run mypy teltonika_rms --explicit-package-bases --show-error-codes --error-summary
 
 unit-tests: ## Run unit tests
 	@echo "Running pytest"

@@ -3,7 +3,7 @@
 import logging
 import time
 from functools import wraps
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, Optional, Tuple, Type, TypeVar
 
 from teltonika_rms.exceptions import RMSConnectionError
 
@@ -17,7 +17,7 @@ def retry_with_backoff(
     initial_delay: float = 1.0,
     max_delay: float = 60.0,
     exponential_base: float = 2.0,
-    retryable_exceptions: tuple[type[Exception], ...] = (RMSConnectionError,),
+    retryable_exceptions: Tuple[Type[Exception], ...] = (RMSConnectionError,),
 ) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """Decorator to retry a function with exponential backoff.
 
@@ -36,7 +36,7 @@ def retry_with_backoff(
         @wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> T:
             delay = initial_delay
-            last_exception: Exception | None = None
+            last_exception: Optional[Exception] = None
 
             for attempt in range(max_retries + 1):
                 try:

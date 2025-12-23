@@ -2,7 +2,7 @@
 
 import json
 import logging
-from typing import Any
+from typing import Any, Dict, Union
 
 try:
     import httpx
@@ -16,7 +16,7 @@ SENSITIVE_HEADERS = {"authorization", "x-api-key", "cookie"}
 MAX_LOG_BODY_LENGTH = 1000
 
 
-def _normalize_log_level(level: str | int) -> int:
+def _normalize_log_level(level: Union[str, int]) -> int:
     """Normalize log level to integer.
 
     Args:
@@ -30,7 +30,7 @@ def _normalize_log_level(level: str | int) -> int:
     return level
 
 
-def set_log_level(level: str | int) -> None:
+def set_log_level(level: Union[str, int]) -> None:
     """Set the log level for the teltonika_rms logger.
 
     Args:
@@ -73,7 +73,7 @@ def get_logger(name: str) -> logging.Logger:
     return logging.getLogger(name)
 
 
-def mask_sensitive_headers(headers: dict[str, str] | Any) -> dict[str, str]:
+def mask_sensitive_headers(headers: Union[Dict[str, str], Any]) -> Dict[str, str]:
     """Mask sensitive headers in a dictionary.
 
     Args:

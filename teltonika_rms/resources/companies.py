@@ -1,7 +1,7 @@
 """Companies resource."""
 
 import logging
-from typing import Any, cast
+from typing import Any, Dict, List, Optional, Union, cast
 
 from teltonika_rms.exceptions import RMSNotFoundError
 from teltonika_rms.resources.base import BaseResource
@@ -16,7 +16,7 @@ class CompaniesResource(BaseResource):
         """Initialize companies resource."""
         super().__init__(client, "/companies")
 
-    def create(self, name: str, parent_id: int, **kwargs: Any) -> dict[str, Any]:
+    def create(self, name: str, parent_id: int, **kwargs: Any) -> Dict[str, Any]:  # type: ignore[override]
         """Create a new company.
 
         Args:
@@ -28,9 +28,9 @@ class CompaniesResource(BaseResource):
             Created company data
         """
         data = {"name": name, "parent_id": parent_id, **kwargs}
-        return cast(dict[str, Any], super().create(**data))
+        return cast(Dict[str, Any], super().create(**data))
 
-    def filter(self, **kwargs: Any) -> list[dict[str, Any]]:
+    def filter(self, **kwargs: Any) -> List[Dict[str, Any]]:
         """Get filtered list of companies using client-side filtering.
 
         Note: This method fetches all companies and filters them client-side
@@ -51,14 +51,14 @@ class CompaniesResource(BaseResource):
             items = response.get("data", [])
             # Still filter client-side for exact match
             filtered = self._filter_items_client_side(items, **kwargs)
-            return cast(list[dict[str, Any]], filtered)
+            return cast(List[Dict[str, Any]], filtered)
 
         # For other filters or multiple filters, fetch all and filter client-side
         all_companies = self.all()
         filtered = self._filter_items_client_side(all_companies, **kwargs)
-        return cast(list[dict[str, Any]], filtered)
+        return cast(List[Dict[str, Any]], filtered)
 
-    def _get_by_id(self, id: int | str) -> dict[str, Any]:
+    def _get_by_id(self, id: Union[int, str]) -> Dict[str, Any]:
         """Get a company by ID.
 
         Args:
@@ -79,12 +79,12 @@ class CompaniesResource(BaseResource):
                 data = response["data"]
                 # If data is a dict (single object), return it; if list, return first item
                 if isinstance(data, dict):
-                    return cast(dict[str, Any], data)
+                    return cast(Dict[str, Any], data)
                 elif isinstance(data, list) and len(data) > 0:
-                    return cast(dict[str, Any], data[0])
-        return cast(dict[str, Any], response)
+                    return cast(Dict[str, Any], data[0])
+        return cast(Dict[str, Any], response)
 
-    def _get_by_filters(self, **kwargs: Any) -> dict[str, Any]:
+    def _get_by_filters(self, **kwargs: Any) -> Dict[str, Any]:
         """Get a company by filter parameters using client-side filtering.
 
         Args:
@@ -121,9 +121,11 @@ class CompaniesResource(BaseResource):
                 "Use filter() to get all results or be more specific."
             )
 
-        return cast(dict[str, Any], exact_matches[0])
+        return cast(Dict[str, Any], exact_matches[0])
 
-    def get(self, id: int | str | None = None, **kwargs: Any) -> dict[str, Any]:
+    def get(
+        self, id: Optional[Union[int, str]] = None, **kwargs: Any
+    ) -> Dict[str, Any]:
         """Get a single company by ID or by filter parameters.
 
         Args:

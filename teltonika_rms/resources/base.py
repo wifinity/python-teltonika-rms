@@ -1,7 +1,7 @@
 """Base resource class for API resources."""
 
 import logging
-from typing import Any, cast
+from typing import Any, Dict, List, Optional, Union, cast
 
 from teltonika_rms.exceptions import RMSNotFoundError
 
@@ -22,13 +22,13 @@ class BaseResource:
         self.path = path.rstrip("/")
         logger.debug(f"Initialized {self.__class__.__name__} with path {self.path}")
 
-    def all(self) -> list[dict[str, Any]]:
+    def all(self) -> List[Dict[str, Any]]:
         """Get all items, automatically handling pagination.
 
         Returns:
             List of all items across all pages
         """
-        all_items: list[dict[str, Any]] = []
+        all_items: List[Dict[str, Any]] = []
         offset = 0
         limit = 100  # Default page size
 
@@ -63,7 +63,9 @@ class BaseResource:
         logger.debug(f"Fetched {len(all_items)} items from {self.path}")
         return all_items
 
-    def get(self, id: int | str | None = None, **kwargs: Any) -> dict[str, Any]:
+    def get(
+        self, id: Optional[Union[int, str]] = None, **kwargs: Any
+    ) -> Dict[str, Any]:
         """Get a single item by ID or by filter parameters.
 
         Args:
@@ -82,7 +84,7 @@ class BaseResource:
             response = self.client.get(f"{self.path}/{id}")
             if not response:
                 raise RMSNotFoundError(f"Item with id {id} not found")
-            return cast(dict[str, Any], response)
+            return cast(Dict[str, Any], response)
 
         # If filter parameters are provided, use filter and return single result
         if kwargs:
@@ -98,12 +100,12 @@ class BaseResource:
                     f"Multiple items found ({len(items)}). Use filter() to get all results or be more specific."
                 )
 
-            return cast(dict[str, Any], items[0])
+            return cast(Dict[str, Any], items[0])
 
         # Neither ID nor filter parameters provided
         raise ValueError("Either 'id' or filter parameters must be provided")
 
-    def filter(self, **kwargs: Any) -> list[dict[str, Any]]:
+    def filter(self, **kwargs: Any) -> List[Dict[str, Any]]:
         """Get filtered list of items.
 
         Args:
@@ -116,9 +118,9 @@ class BaseResource:
         if not response:
             return []
         data = response.get("data", [])
-        return cast(list[dict[str, Any]], data)
+        return cast(List[Dict[str, Any]], data)
 
-    def create(self, **kwargs: Any) -> dict[str, Any]:
+    def create(self, **kwargs: Any) -> Dict[str, Any]:
         """Create a new item.
 
         Args:
@@ -130,9 +132,9 @@ class BaseResource:
         response = self.client.post(self.path, json=kwargs)
         if not response:
             raise ValueError("Failed to create item")
-        return cast(dict[str, Any], response)
+        return cast(Dict[str, Any], response)
 
-    def update(self, id: int | str, data: dict[str, Any]) -> dict[str, Any]:
+    def update(self, id: Union[int, str], data: Dict[str, Any]) -> Dict[str, Any]:
         """Update an existing item.
 
         Args:
@@ -145,9 +147,9 @@ class BaseResource:
         response = self.client.put(f"{self.path}/{id}", json=data)
         if not response:
             raise ValueError(f"Failed to update item with id {id}")
-        return cast(dict[str, Any], response)
+        return cast(Dict[str, Any], response)
 
-    def delete(self, id: int | str) -> dict[str, Any] | None:
+    def delete(self, id: Union[int, str]) -> Optional[Dict[str, Any]]:
         """Delete an item.
 
         Args:
@@ -157,11 +159,11 @@ class BaseResource:
             Response data or None
         """
         result = self.client.delete(f"{self.path}/{id}")
-        return cast(dict[str, Any] | None, result)
+        return cast(Optional[Dict[str, Any]], result)
 
     def _filter_items_client_side(
-        self, items: list[dict[str, Any]], **filters: Any
-    ) -> list[dict[str, Any]]:
+        self, items: List[Dict[str, Any]], **filters: Any
+    ) -> List[Dict[str, Any]]:
         """Filter items client-side based on provided criteria.
 
         Args:
