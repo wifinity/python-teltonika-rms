@@ -37,7 +37,7 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["teltonika_rms"]
+packages = {find = {}}
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
