@@ -1,5 +1,8 @@
 """Tests for resource classes."""
 
+from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
+
 import pytest
 import respx
 from respx import MockResponse as resp
@@ -973,3 +976,93 @@ def test_devices_assign_tags_invalid_tag_id_raises(client: RMSClient):
     """Test devices.assign_tags() raises error for invalid tag_id."""
     with pytest.raises(ValueError, match="tag_id must be an integer"):
         client.devices.assign_tags(device_id=123, tag_ids="not-a-number")
+
+
+def test_devices_custom_data_rejects_naive_start_datetime(client: RMSClient):
+    start_date = datetime(2026, 3, 30, 8, 0, 0)  # naive -> rejected
+    end_date = datetime(2026, 3, 30, 11, 0, 0, tzinfo=timezone.utc)
+
+    with pytest.raises(TypeError, match="timezone-aware"):
+        client.devices.custom_data(
+            1,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+
+@respx.mock
+def test_devices_custom_data_aware_datetime_converted_to_utc(
+    client: RMSClient,
+):
+    tz_plus_2 = timezone(timedelta(hours=2))
+    start_date = datetime(2026, 3, 30, 8, 0, 0, tzinfo=tz_plus_2)  # -> 06:00 UTC
+    end_date = datetime(2026, 3, 30, 11, 0, 0, tzinfo=tz_plus_2)  # -> 09:00 UTC
+
+    respx.get("https://rms.teltonika-networks.com/api/devices/1/custom-data").mock(
+        return_value=resp(
+            status_code=200,
+            json={"success": True, "data": [], "meta": {"total": 0}},
+        )
+    )
+
+    client.devices.custom_data(
+        1,
+        start_date=start_date,
+        end_date=end_date,
+    )
+
+    request = respx.calls.last.request
+    assert request is not None
+    assert request.url.params["start_date"] == "2026-03-30 06:00:00"
+    assert request.url.params["end_date"] == "2026-03-30 09:00:00"
+
+
+@respx.mock
+def test_devices_custom_data_end_date_defaults_to_now_utc(
+    client: RMSClient,
+):
+    start_date = datetime(
+        2026, 3, 30, 8, 0, 0, tzinfo=timezone.utc
+    )  # aware -> no conversion needed
+    fixed_now = datetime(2026, 3, 30, 12, 30, 45, tzinfo=timezone.utc)
+
+    respx.get("https://rms.teltonika-networks.com/api/devices/1/custom-data").mock(
+        return_value=resp(
+            status_code=200,
+            json={"success": True, "data": [], "meta": {"total": 0}},
+        )
+    )
+
+    with patch("teltonika_rms.resources.devices._utcnow", return_value=fixed_now):
+        client.devices.custom_data(1, start_date=start_date)
+
+    request = respx.calls.last.request
+    assert request is not None
+    assert request.url.params["start_date"] == "2026-03-30 08:00:00"
+    assert request.url.params["end_date"] == "2026-03-30 12:30:45"
+
+
+@respx.mock
+def test_devices_custom_data_includes_config_id_and_casts_int(
+    client: RMSClient,
+):
+    start_date = datetime(2026, 3, 30, 8, 0, 0, tzinfo=timezone.utc)
+    end_date = datetime(2026, 3, 30, 11, 0, 0, tzinfo=timezone.utc)
+
+    respx.get("https://rms.teltonika-networks.com/api/devices/1/custom-data").mock(
+        return_value=resp(
+            status_code=200,
+            json={"success": True, "data": [], "meta": {"total": 0}},
+        )
+    )
+
+    client.devices.custom_data(
+        1,
+        start_date=start_date,
+        end_date=end_date,
+        config_id="123",
+    )
+
+    request = respx.calls.last.request
+    assert request is not None
+    assert request.url.params["config_id"] == "123"

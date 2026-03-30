@@ -1,12 +1,42 @@
 """Devices resource."""
 
 import logging
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union, cast
 
 from teltonika_rms.exceptions import RMSNotFoundError
 from teltonika_rms.resources.base import BaseResource
 
 logger = logging.getLogger(__name__)
+
+_RMS_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+
+def _utcnow() -> datetime:
+    """Return current time in UTC.
+
+    Kept as a separate function so unit tests can patch it easily.
+    """
+
+    return datetime.now(timezone.utc)
+
+
+def _to_rms_utc_string(dt: datetime) -> str:
+    """Convert input datetime to RMS UTC query string.
+
+    RMS expects `Y-m-d H:i:s` and treats it as UTC.
+    - Aware datetimes are converted to UTC.
+    """
+
+    if dt.tzinfo is None:
+        raise TypeError(
+            "RMS datetime parameters must be timezone-aware (provide tzinfo). "
+            "Use datetime(..., tzinfo=timezone.utc) for UTC."
+        )
+
+    dt_utc = dt.astimezone(timezone.utc)
+    return dt_utc.strftime(_RMS_DATETIME_FORMAT)
+
 
 # Allowed filter parameters for devices API
 ALLOWED_DEVICE_FILTERS = {"status", "mac", "model", "company_id"}
@@ -281,6 +311,41 @@ class DevicesResource(BaseResource):
         response = self.client.put(f"{self.path}/{device_id}", json=data)
         if not response:
             raise ValueError(f"Failed to update device with id {device_id}")
+        return cast(Dict[str, Any], response)
+
+    def custom_data(
+        self,
+        device_id: Union[int, str],
+        *,
+        start_date: datetime,
+        end_date: Optional[datetime] = None,
+        config_id: Optional[Union[int, str]] = None,
+    ) -> Dict[str, Any]:
+        """Fetch device historical monitoring logs.
+
+        Calls `GET /devices/{id}/custom-data` with RMS UTC time strings.
+        """
+
+        device_id_int = self._cast_to_int(device_id, "device_id")
+        if device_id_int < 1:
+            raise ValueError("device_id must be >= 1")
+
+        if end_date is None:
+            end_date = _utcnow()
+
+        params: Dict[str, Any] = {
+            "start_date": _to_rms_utc_string(start_date),
+            "end_date": _to_rms_utc_string(end_date),
+        }
+        if config_id is not None:
+            params["config_id"] = self._cast_to_int(config_id, "config_id")
+
+        response = self.client.get(
+            f"{self.path}/{device_id_int}/custom-data",
+            params=params,
+        )
+        if response is None:
+            raise ValueError("Failed to fetch custom-data")
         return cast(Dict[str, Any], response)
 
     def _normalize_device_ids(

@@ -240,6 +240,16 @@ client.devices.assign_tags(device_id=789, tag_ids=456)
 
 # Assign multiple tags to a device
 client.devices.assign_tags(device_id=789, tag_ids=[456, 789])
+
+# Fetch historical monitoring logs (GET /devices/{id}/custom-data)
+# Note: datetimes are converted to RMS UTC; naive datetimes (no tzinfo) are rejected.
+from datetime import datetime, timezone
+logs = client.devices.custom_data(
+    device_id=789,
+    start_date=datetime(2026, 3, 30, 8, 0, 0, tzinfo=timezone.utc),
+    # end_date defaults to "now" in UTC if omitted
+    config_id=123,  # optional
+)
 ```
 
 #### Device Commands
