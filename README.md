@@ -243,6 +243,8 @@ client.devices.assign_tags(device_id=789, tag_ids=[456, 789])
 
 # Fetch historical monitoring logs (GET /devices/{id}/custom-data)
 # Note: datetimes are converted to RMS UTC; naive datetimes (no tzinfo) are rejected.
+# The client automatically performs iterative backward requests using `created_at`
+# so you get the full requested range even if RMS caps rows per response.
 from datetime import datetime, timezone
 logs = client.devices.custom_data(
     device_id=789,

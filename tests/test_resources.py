@@ -1066,3 +1066,144 @@ def test_devices_custom_data_includes_config_id_and_casts_int(
     request = respx.calls.last.request
     assert request is not None
     assert request.url.params["config_id"] == "123"
+
+
+@respx.mock
+def test_devices_custom_data_iterative_fetch_merges_rows(client: RMSClient):
+    start_date = datetime(2026, 3, 30, 8, 0, 0, tzinfo=timezone.utc)
+    end_date = datetime(2026, 3, 30, 11, 0, 0, tzinfo=timezone.utc)
+
+    route = respx.get("https://rms.teltonika-networks.com/api/devices/1/custom-data")
+    route.mock(
+        side_effect=[
+            resp(
+                status_code=200,
+                json={
+                    "success": True,
+                    "data": [
+                        {"created_at": "2026-03-30 10:29:10", "data": {"rsrp": -90}},
+                        {"created_at": "2026-03-30 10:15:00", "data": {"rsrp": -91}},
+                    ],
+                    "meta": {"total": 2},
+                },
+            ),
+            resp(
+                status_code=200,
+                json={
+                    "success": True,
+                    "data": [
+                        {"created_at": "2026-03-30 09:55:00", "data": {"rsrp": -89}},
+                    ],
+                    "meta": {"total": 1},
+                },
+            ),
+            resp(
+                status_code=200,
+                json={"success": True, "data": [], "meta": {"total": 0}},
+            ),
+        ]
+    )
+
+    result = client.devices.custom_data(1, start_date=start_date, end_date=end_date)
+    assert len(result["data"]) == 3
+    assert [row["created_at"] for row in result["data"]] == [
+        "2026-03-30 09:55:00",
+        "2026-03-30 10:15:00",
+        "2026-03-30 10:29:10",
+    ]
+    assert result["meta"]["total"] == 3
+
+    assert len(respx.calls) == 3
+    assert respx.calls[0].request.url.params["end_date"] == "2026-03-30 11:00:00"
+    assert respx.calls[1].request.url.params["end_date"] == "2026-03-30 10:14:59"
+    assert respx.calls[2].request.url.params["end_date"] == "2026-03-30 09:54:59"
+
+
+@respx.mock
+def test_devices_custom_data_deduplicates_overlapping_rows(client: RMSClient):
+    start_date = datetime(2026, 3, 30, 8, 0, 0, tzinfo=timezone.utc)
+    end_date = datetime(2026, 3, 30, 11, 0, 0, tzinfo=timezone.utc)
+
+    route = respx.get("https://rms.teltonika-networks.com/api/devices/1/custom-data")
+    route.mock(
+        side_effect=[
+            resp(
+                status_code=200,
+                json={
+                    "success": True,
+                    "data": [
+                        {"created_at": "2026-03-30 10:10:00", "data": {"rsrp": -90}},
+                        {"created_at": "2026-03-30 10:00:00", "data": {"rsrp": -89}},
+                    ],
+                    "meta": {"total": 2},
+                },
+            ),
+            resp(
+                status_code=200,
+                json={
+                    "success": True,
+                    "data": [
+                        {"created_at": "2026-03-30 10:00:00", "data": {"rsrp": -89}},
+                        {"created_at": "2026-03-30 09:40:00", "data": {"rsrp": -88}},
+                    ],
+                    "meta": {"total": 2},
+                },
+            ),
+            resp(
+                status_code=200,
+                json={"success": True, "data": [], "meta": {"total": 0}},
+            ),
+        ]
+    )
+
+    result = client.devices.custom_data(1, start_date=start_date, end_date=end_date)
+    assert [row["created_at"] for row in result["data"]] == [
+        "2026-03-30 09:40:00",
+        "2026-03-30 10:00:00",
+        "2026-03-30 10:10:00",
+    ]
+    assert result["meta"]["total"] == 3
+
+
+@respx.mock
+def test_devices_custom_data_stops_when_oldest_cursor_not_advancing(client: RMSClient):
+    start_date = datetime(2026, 3, 30, 8, 0, 0, tzinfo=timezone.utc)
+    end_date = datetime(2026, 3, 30, 11, 0, 0, tzinfo=timezone.utc)
+
+    route = respx.get("https://rms.teltonika-networks.com/api/devices/1/custom-data")
+    route.mock(
+        side_effect=[
+            resp(
+                status_code=200,
+                json={
+                    "success": True,
+                    "data": [
+                        {"created_at": "2026-03-30 10:10:00", "data": {"rsrp": -90}}
+                    ],
+                    "meta": {"total": 1},
+                },
+            ),
+            resp(
+                status_code=200,
+                json={
+                    "success": True,
+                    "data": [
+                        {"created_at": "2026-03-30 10:10:00", "data": {"rsrp": -90}}
+                    ],
+                    "meta": {"total": 1},
+                },
+            ),
+        ]
+    )
+
+    result = client.devices.custom_data(1, start_date=start_date, end_date=end_date)
+    assert len(result["data"]) == 1
+    assert len(respx.calls) == 2
+
+
+def test_devices_custom_data_invalid_range_raises(client: RMSClient):
+    start_date = datetime(2026, 3, 30, 11, 0, 0, tzinfo=timezone.utc)
+    end_date = datetime(2026, 3, 30, 10, 0, 0, tzinfo=timezone.utc)
+
+    with pytest.raises(ValueError, match="start_date must be earlier than end_date"):
+        client.devices.custom_data(1, start_date=start_date, end_date=end_date)

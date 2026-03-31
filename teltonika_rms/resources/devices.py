@@ -1,8 +1,9 @@
 """Devices resource."""
 
+import json
 import logging
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Union, cast
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Set, Tuple, Union, cast
 
 from teltonika_rms.exceptions import RMSNotFoundError
 from teltonika_rms.resources.base import BaseResource
@@ -10,6 +11,7 @@ from teltonika_rms.resources.base import BaseResource
 logger = logging.getLogger(__name__)
 
 _RMS_DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+_CUSTOM_DATA_MAX_ITERATIONS = 1000
 
 
 def _utcnow() -> datetime:
@@ -36,6 +38,29 @@ def _to_rms_utc_string(dt: datetime) -> str:
 
     dt_utc = dt.astimezone(timezone.utc)
     return dt_utc.strftime(_RMS_DATETIME_FORMAT)
+
+
+def _to_utc_datetime(dt: datetime) -> datetime:
+    """Normalize aware datetime to UTC."""
+
+    if dt.tzinfo is None:
+        raise TypeError(
+            "RMS datetime parameters must be timezone-aware (provide tzinfo). "
+            "Use datetime(..., tzinfo=timezone.utc) for UTC."
+        )
+    return dt.astimezone(timezone.utc)
+
+
+def _parse_created_at(value: Any) -> Optional[datetime]:
+    """Parse RMS `created_at` string to UTC datetime."""
+
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.strptime(value, _RMS_DATETIME_FORMAT)
+    except ValueError:
+        return None
+    return parsed.replace(tzinfo=timezone.utc)
 
 
 # Allowed filter parameters for devices API
@@ -313,6 +338,98 @@ class DevicesResource(BaseResource):
             raise ValueError(f"Failed to update device with id {device_id}")
         return cast(Dict[str, Any], response)
 
+    def _fetch_custom_data_page(
+        self,
+        device_id_int: int,
+        start_date_utc: datetime,
+        end_cursor: datetime,
+        config_id_int: Optional[int],
+    ) -> Dict[str, Any]:
+        params: Dict[str, Any] = {
+            "start_date": _to_rms_utc_string(start_date_utc),
+            "end_date": _to_rms_utc_string(end_cursor),
+        }
+        if config_id_int is not None:
+            params["config_id"] = config_id_int
+
+        response = self.client.get(
+            f"{self.path}/{device_id_int}/custom-data",
+            params=params,
+        )
+        if response is None:
+            raise ValueError("Failed to fetch custom-data")
+        if not isinstance(response, dict):
+            raise ValueError("Invalid custom-data response format")
+        return cast(Dict[str, Any], response)
+
+    def _merge_custom_data_rows(
+        self,
+        rows: List[Any],
+        merged_rows: List[Dict[str, Any]],
+        seen_keys: set,
+    ) -> Optional[datetime]:
+        if not isinstance(rows, list):
+            raise ValueError("RMS custom-data response missing or invalid 'data' list")
+
+        oldest_in_page: Optional[datetime] = None
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+
+            created_at_value = row.get("created_at")
+            row_data = row.get("data")
+            row_key = (
+                created_at_value,
+                json.dumps(row_data, sort_keys=True, default=str),
+            )
+            if row_key not in seen_keys:
+                seen_keys.add(row_key)
+                merged_rows.append(cast(Dict[str, Any], row))
+
+            parsed_created_at = _parse_created_at(created_at_value)
+            if parsed_created_at is None:
+                continue
+            if oldest_in_page is None or parsed_created_at < oldest_in_page:
+                oldest_in_page = parsed_created_at
+
+        return oldest_in_page
+
+    def _should_stop_custom_data_pagination(
+        self,
+        oldest_in_page: Optional[datetime],
+        previous_oldest: Optional[datetime],
+        start_date_utc: datetime,
+    ) -> bool:
+        if oldest_in_page is None:
+            return True
+        if oldest_in_page <= start_date_utc:
+            return True
+        if previous_oldest is not None and oldest_in_page >= previous_oldest:
+            return True
+        return False
+
+    def _build_custom_data_result(
+        self,
+        last_response: Dict[str, Any],
+        merged_rows: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        merged_rows.sort(
+            key=lambda item: _parse_created_at(item.get("created_at"))
+            or datetime.max.replace(tzinfo=timezone.utc)
+        )
+
+        result = dict(last_response)
+        result["data"] = merged_rows
+
+        meta = result.get("meta")
+        if isinstance(meta, dict):
+            new_meta = dict(meta)
+            new_meta["total"] = len(merged_rows)
+            result["meta"] = new_meta
+        else:
+            result["meta"] = {"total": len(merged_rows)}
+        return cast(Dict[str, Any], result)
+
     def custom_data(
         self,
         device_id: Union[int, str],
@@ -324,29 +441,69 @@ class DevicesResource(BaseResource):
         """Fetch device historical monitoring logs.
 
         Calls `GET /devices/{id}/custom-data` with RMS UTC time strings.
+        Uses iterative backward pagination by `created_at` to return the
+        full requested range.
         """
 
         device_id_int = self._cast_to_int(device_id, "device_id")
         if device_id_int < 1:
             raise ValueError("device_id must be >= 1")
 
+        start_date_utc = _to_utc_datetime(start_date)
         if end_date is None:
             end_date = _utcnow()
+        end_date_utc = _to_utc_datetime(end_date)
+        if start_date_utc >= end_date_utc:
+            raise ValueError("start_date must be earlier than end_date")
 
-        params: Dict[str, Any] = {
-            "start_date": _to_rms_utc_string(start_date),
-            "end_date": _to_rms_utc_string(end_date),
-        }
+        config_id_int: Optional[int] = None
         if config_id is not None:
-            params["config_id"] = self._cast_to_int(config_id, "config_id")
+            config_id_int = self._cast_to_int(config_id, "config_id")
 
-        response = self.client.get(
-            f"{self.path}/{device_id_int}/custom-data",
-            params=params,
-        )
-        if response is None:
+        merged_rows: List[Dict[str, Any]] = []
+        seen_keys: Set[Tuple[Any, str]] = set()
+        last_response: Optional[Dict[str, Any]] = None
+        end_cursor = end_date_utc
+        previous_oldest: Optional[datetime] = None
+
+        for _ in range(_CUSTOM_DATA_MAX_ITERATIONS):
+            response = self._fetch_custom_data_page(
+                device_id_int=device_id_int,
+                start_date_utc=start_date_utc,
+                end_cursor=end_cursor,
+                config_id_int=config_id_int,
+            )
+            last_response = response
+
+            rows = response.get("data", [])
+            if not rows:
+                break
+
+            oldest_in_page = self._merge_custom_data_rows(
+                rows=rows,
+                merged_rows=merged_rows,
+                seen_keys=seen_keys,
+            )
+
+            if self._should_stop_custom_data_pagination(
+                oldest_in_page=oldest_in_page,
+                previous_oldest=previous_oldest,
+                start_date_utc=start_date_utc,
+            ):
+                break
+
+            assert oldest_in_page is not None
+            previous_oldest = oldest_in_page
+            end_cursor = oldest_in_page - timedelta(seconds=1)
+            if end_cursor <= start_date_utc:
+                break
+        else:
+            raise RuntimeError("custom_data pagination exceeded safe iteration limit")
+
+        if last_response is None:
             raise ValueError("Failed to fetch custom-data")
-        return cast(Dict[str, Any], response)
+
+        return self._build_custom_data_result(last_response, merged_rows)
 
     def _normalize_device_ids(
         self, device_ids: Union[int, str, List[Union[int, str]]]
