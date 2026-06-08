@@ -703,3 +703,57 @@ class DevicesResource(BaseResource):
         if not response:
             raise ValueError("Failed to assign tags to device")
         return cast(Dict[str, Any], response)
+
+    def unassign_tags(
+        self,
+        device_id: Union[int, str],
+        tag_ids: Union[int, str, List[Union[int, str]]],
+    ) -> Dict[str, Any]:
+        """Unassign one or more tags from a device.
+
+        Args:
+            device_id: Device ID (can be string or int)
+            tag_ids: Single tag ID or list of tag IDs (can be strings or ints)
+
+        Returns:
+            API response
+
+        Raises:
+            ValueError: If device_id or tag_ids are invalid
+        """
+        casted_device_id = self._cast_to_int(device_id, "device_id")
+        if casted_device_id < 1:
+            raise ValueError("device_id must be >= 1")
+
+        if isinstance(tag_ids, (int, str)):
+            tag_ids_list = [tag_ids]
+        elif isinstance(tag_ids, list):
+            tag_ids_list = tag_ids
+        else:
+            raise ValueError(
+                f"tag_ids must be int, str, or list of int/str, got {type(tag_ids).__name__}"
+            )
+
+        casted_tag_ids = [
+            self._cast_to_int(tag_id, "tag_id") for tag_id in tag_ids_list
+        ]
+
+        invalid_tag_ids = [tid for tid in casted_tag_ids if tid < 1]
+        if invalid_tag_ids:
+            raise ValueError(
+                f"Invalid tag IDs: {invalid_tag_ids}. Tag IDs must be >= 1"
+            )
+
+        unassign_data = {
+            "data": [
+                {
+                    "device_id": casted_device_id,
+                    "tag_id": casted_tag_ids,
+                }
+            ]
+        }
+
+        response = self.client.put(f"{self.path}/tags/unassign", json=unassign_data)
+        if not response:
+            raise ValueError("Failed to unassign tags from device")
+        return cast(Dict[str, Any], response)

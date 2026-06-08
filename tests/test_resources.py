@@ -978,6 +978,52 @@ def test_devices_assign_tags_invalid_tag_id_raises(client: RMSClient):
         client.devices.assign_tags(device_id=123, tag_ids="not-a-number")
 
 
+@respx.mock
+def test_devices_unassign_tags_single(client: RMSClient):
+    """Test devices.unassign_tags() with single tag ID."""
+    respx.put("https://rms.teltonika-networks.com/api/devices/tags/unassign").mock(
+        return_value=resp(status_code=200, json={"success": True})
+    )
+
+    result = client.devices.unassign_tags(device_id=123, tag_ids=456)
+    assert result["success"] is True
+
+    request = respx.calls.last.request
+    assert request is not None
+    assert request.method == "PUT"
+    assert request.url.path == "/api/devices/tags/unassign"
+    import json
+
+    request_json = json.loads(request.read().decode("utf-8"))
+    assert request_json["data"][0]["device_id"] == 123
+    assert request_json["data"][0]["tag_id"] == [456]
+
+
+@respx.mock
+def test_devices_unassign_tags_multiple(client: RMSClient):
+    """Test devices.unassign_tags() with list of tag IDs."""
+    respx.put("https://rms.teltonika-networks.com/api/devices/tags/unassign").mock(
+        return_value=resp(status_code=200, json={"success": True})
+    )
+
+    result = client.devices.unassign_tags(device_id=123, tag_ids=[456, 789])
+    assert result["success"] is True
+
+    request = respx.calls.last.request
+    assert request is not None
+    import json
+
+    request_json = json.loads(request.read().decode("utf-8"))
+    assert request_json["data"][0]["device_id"] == 123
+    assert request_json["data"][0]["tag_id"] == [456, 789]
+
+
+def test_devices_unassign_tags_invalid_device_id_raises(client: RMSClient):
+    """Test devices.unassign_tags() raises error for invalid device_id."""
+    with pytest.raises(ValueError, match="device_id must be an integer"):
+        client.devices.unassign_tags(device_id="not-a-number", tag_ids=456)
+
+
 def test_devices_custom_data_rejects_naive_start_datetime(client: RMSClient):
     start_date = datetime(2026, 3, 30, 8, 0, 0)  # naive -> rejected
     end_date = datetime(2026, 3, 30, 11, 0, 0, tzinfo=timezone.utc)
