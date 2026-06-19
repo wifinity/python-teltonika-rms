@@ -257,11 +257,25 @@ logs = client.devices.custom_data(
 #### Device Commands
 
 ```python
-# Execute a command for a specific device
+# Execute a command and wait for the result (recommended)
+# The RMS API is async: run() fires the command, polls the Status API, and returns
+# the final result event once the command completes or errors.
+event = client.device_commands.run(
+    device_id=789,
+    command_data={"command": "echo 'y' | speedtest -s -t 5 > /tmp/speedtest.json 2>&1 &"},
+    poll_interval=5.0,  # seconds between status polls (default 5)
+    timeout=120.0,      # max seconds to wait (default 120), raises RMSAPIError on timeout
+)
+print(event["status"])  # "completed" or "error"
+print(event["value"])   # command output
+
+# Low-level: fire only, handle the status channel yourself
 result = client.device_commands.execute(
     device_id=789,
-    command_data={"command": "reboot", "parameters": {}}
+    command_data={"command": "reboot"},
 )
+channel = result["meta"]["channel"]
+status = client.poll_status(channel)  # GET /status/channel/{channel}
 
 # Execute actions for multiple devices
 action_result = client.device_commands.actions.execute(

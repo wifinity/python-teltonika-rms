@@ -1,7 +1,10 @@
 """Device commands resource."""
 
 import logging
+import time
 from typing import Any, Dict, List, Optional, cast
+
+from teltonika_rms.exceptions import RMSAPIError
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +95,48 @@ class DeviceCommandsResource:
             command_data: Command data (execute_command schema)
 
         Returns:
-            Response data
+            Response data including meta.channel for polling the result
         """
         result = self.client.post(f"/devices/{device_id}/command", json=command_data)
         return cast(Optional[Dict[str, Any]], result)
+
+    def run(
+        self,
+        device_id: int,
+        command_data: Dict[str, Any],
+        poll_interval: float = 5.0,
+        timeout: float = 120.0,
+    ) -> Optional[Dict[str, Any]]:
+        """Execute a command and wait for the result.
+
+        Fires the command via execute(), then polls the Status API until the
+        command completes or errors, or until timeout is exceeded.
+
+        Args:
+            device_id: Device ID
+            command_data: Command data (e.g. {"command": "speedtest -s"})
+            poll_interval: Seconds between status polls
+            timeout: Maximum seconds to wait for a result
+
+        Returns:
+            Final status event dict (contains value, status, type keys)
+
+        Raises:
+            RMSAPIError: If timeout is exceeded before a result is received
+        """
+        result = self.execute(device_id, command_data)
+        channel = (result or {}).get("meta", {}).get("channel")
+        if not channel:
+            raise RMSAPIError("No status channel returned by execute()")
+
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            status = self.client.poll_status(channel)
+            events = (status or {}).get("data", {}).get(str(device_id), [])
+            if events and events[-1]["status"] in ("completed", "error"):
+                return cast(Optional[Dict[str, Any]], events[-1])
+            time.sleep(poll_interval)
+
+        raise RMSAPIError(
+            f"Command did not complete within {timeout}s (device_id={device_id})"
+        )

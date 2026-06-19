@@ -8,6 +8,7 @@ import respx
 from respx import MockResponse as resp
 
 from teltonika_rms.client import RMSClient
+from teltonika_rms.exceptions import RMSAPIError
 
 
 @respx.mock
@@ -1235,3 +1236,121 @@ def test_devices_custom_data_invalid_range_raises(client: RMSClient):
 
     with pytest.raises(ValueError, match="start_date must be earlier than end_date"):
         client.devices.custom_data(1, start_date=start_date, end_date=end_date)
+
+
+_CHANNEL = "test-channel-abc123"
+_STATUS_URL = f"https://rms.teltonika-networks.com/status/channel/{_CHANNEL}"
+_EXECUTE_URL = "https://rms.teltonika-networks.com/api/devices/1/command"
+_EXECUTE_RESP = {"success": True, "meta": {"channel": _CHANNEL}}
+
+
+@respx.mock
+def test_device_commands_run_completed(client: RMSClient):
+    """run() returns the completed event on first poll."""
+    respx.post(_EXECUTE_URL).mock(
+        return_value=resp(status_code=200, json=_EXECUTE_RESP)
+    )
+    respx.get(_STATUS_URL).mock(
+        return_value=resp(
+            status_code=200,
+            json={
+                "data": {
+                    "1": [
+                        {
+                            "value": "result output",
+                            "status": "completed",
+                            "type": "text",
+                        }
+                    ]
+                }
+            },
+        )
+    )
+
+    event = client.device_commands.run(1, {"command": "echo hello"})
+    assert event["status"] == "completed"
+    assert event["value"] == "result output"
+
+
+@respx.mock
+def test_device_commands_run_error_status(client: RMSClient):
+    """run() returns the event even when status is error."""
+    respx.post(_EXECUTE_URL).mock(
+        return_value=resp(status_code=200, json=_EXECUTE_RESP)
+    )
+    respx.get(_STATUS_URL).mock(
+        return_value=resp(
+            status_code=200,
+            json={
+                "data": {
+                    "1": [
+                        {
+                            "value": "Timeout.",
+                            "errorCode": 65545,
+                            "status": "error",
+                            "type": "text",
+                        }
+                    ]
+                }
+            },
+        )
+    )
+
+    event = client.device_commands.run(1, {"command": "speedtest"})
+    assert event["status"] == "error"
+    assert event["errorCode"] == 65545
+
+
+@respx.mock
+def test_device_commands_run_multi_poll(client: RMSClient):
+    """run() keeps polling until status is no longer pending."""
+    respx.post(_EXECUTE_URL).mock(
+        return_value=resp(status_code=200, json=_EXECUTE_RESP)
+    )
+    respx.get(_STATUS_URL).mock(
+        side_effect=[
+            resp(
+                status_code=200,
+                json={
+                    "data": {
+                        "1": [{"value": "...", "status": "pending", "type": "text"}]
+                    }
+                },
+            ),
+            resp(
+                status_code=200,
+                json={
+                    "data": {
+                        "1": [{"value": "done", "status": "completed", "type": "text"}]
+                    }
+                },
+            ),
+        ]
+    )
+
+    with patch("time.sleep"):
+        event = client.device_commands.run(
+            1, {"command": "echo hello"}, poll_interval=0
+        )
+
+    assert event["status"] == "completed"
+    assert event["value"] == "done"
+
+
+@respx.mock
+def test_device_commands_run_timeout(client: RMSClient):
+    """run() raises RMSAPIError when timeout is exceeded."""
+    respx.post(_EXECUTE_URL).mock(
+        return_value=resp(status_code=200, json=_EXECUTE_RESP)
+    )
+    respx.get(_STATUS_URL).mock(
+        return_value=resp(
+            status_code=200,
+            json={
+                "data": {"1": [{"value": "...", "status": "pending", "type": "text"}]}
+            },
+        )
+    )
+
+    with pytest.raises(RMSAPIError, match="did not complete"):
+        client.device_commands.run(1, {"command": "echo hello"}, timeout=0)

@@ -19,7 +19,7 @@ tags, companies, and device commands; unwrapped endpoints use low-level
 | `teltonika_rms/resources/devices.py` | Device CRUD + `custom_data(...)` helper |
 | `teltonika_rms/resources/tags.py` | Tag management |
 | `teltonika_rms/resources/companies.py` | Company-scoped operations |
-| `teltonika_rms/resources/device_commands.py` | Device command dispatch |
+| `teltonika_rms/resources/device_commands.py` | Device command dispatch; `run()` fires and polls for result |
 
 Repo root: `tests/`, `Makefile`, `pyproject.toml`.
 
@@ -30,6 +30,7 @@ Repo root: `tests/`, `Makefile`, `pyproject.toml`.
 - **GET requests:** prefer query params over request bodies.
 - **Datetime params** for monitoring endpoints: format `Y-m-d H:i:s` in RMS UTC; naive datetimes treated as UTC.
 - **Unwrapped endpoints:** call `client.get("/path", params={...})` directly.
+- **Async command results:** `POST /devices/{id}/command` returns `meta.channel`. Poll `GET https://rms.teltonika-networks.com/status/channel/{channel}` via `client.poll_status(channel)`. `device_commands.run()` wraps both steps.
 
 ## Where to look
 

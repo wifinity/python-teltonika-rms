@@ -40,6 +40,7 @@ class RMSClient:
         self,
         token: str,
         base_url: str = "https://rms.teltonika-networks.com/api",
+        status_base_url: str = "https://rms.teltonika-networks.com/status",
         timeout: float = 30.0,
         max_retries: int = 3,
         enable_retry: bool = True,
@@ -50,6 +51,7 @@ class RMSClient:
         Args:
             token: Bearer token for authentication
             base_url: Base URL for the API
+            status_base_url: Base URL for the Status API (used to poll async command results)
             timeout: Request timeout in seconds
             max_retries: Maximum number of retry attempts
             enable_retry: Whether to enable automatic retries
@@ -57,6 +59,7 @@ class RMSClient:
                        or None to use default/global setting
         """
         self.base_url = base_url.rstrip("/")
+        self.status_base_url = status_base_url.rstrip("/")
         self.timeout = timeout
         self.max_retries = max_retries
         self.enable_retry = enable_retry
@@ -426,3 +429,15 @@ class RMSClient:
             User information
         """
         return self.get("/user")
+
+    def poll_status(self, channel: str) -> Optional[Dict[str, Any]]:
+        """Poll the Status API for the result of an async operation.
+
+        Args:
+            channel: Status channel ID returned in meta.channel by async API calls
+
+        Returns:
+            Status response body
+        """
+        url = f"{self.status_base_url}/channel/{channel}"
+        return self._request("GET", url)
