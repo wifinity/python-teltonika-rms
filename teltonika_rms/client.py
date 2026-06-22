@@ -168,7 +168,10 @@ class RMSClient:
                 else f"API error: {status_code}"
             )
             raise RMSAPIError(
-                error_msg, status_code=status_code, response_data=response_data
+                error_msg,
+                status_code=status_code,
+                response_data=response_data,
+                headers=response.headers,
             )
 
         # Return response data for successful requests

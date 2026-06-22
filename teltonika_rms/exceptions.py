@@ -1,6 +1,6 @@
 """Custom exceptions for Teltonika RMS API client."""
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Mapping, Optional
 
 
 class RMSAPIError(Exception):
@@ -11,6 +11,7 @@ class RMSAPIError(Exception):
         message: str,
         status_code: Optional[int] = None,
         response_data: Optional[Dict] = None,
+        headers: Optional[Mapping[str, str]] = None,
     ) -> None:
         """Initialize the exception.
 
@@ -18,11 +19,13 @@ class RMSAPIError(Exception):
             message: Error message
             status_code: HTTP status code if available
             response_data: Response data if available
+            headers: Response headers if available (e.g. to read ``Retry-After``)
         """
         super().__init__(message)
         self.message = message
         self.status_code = status_code
         self.response_data = response_data
+        self.headers = headers
 
 
 class RMSAuthenticationError(RMSAPIError):

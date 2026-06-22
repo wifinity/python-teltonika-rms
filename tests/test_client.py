@@ -44,6 +44,25 @@ def test_client_get_success(client: RMSClient):
 
 
 @respx.mock
+def test_client_get_429_surfaces_retry_after_header(client: RMSClient):
+    """A 429 response exposes its headers on the raised error (for Retry-After)."""
+    respx.get("https://rms.teltonika-networks.com/api/devices").mock(
+        return_value=resp(
+            status_code=429,
+            json={"message": "Too many requests"},
+            headers={"Retry-After": "7"},
+        )
+    )
+
+    with pytest.raises(RMSAPIError) as exc_info:
+        client.get("/devices")
+
+    assert exc_info.value.status_code == 429
+    assert exc_info.value.headers is not None
+    assert exc_info.value.headers.get("Retry-After") == "7"
+
+
+@respx.mock
 def test_client_get_with_params(client: RMSClient):
     """Test GET request with query parameters."""
     respx.get("https://rms.teltonika-networks.com/api/companies").mock(
